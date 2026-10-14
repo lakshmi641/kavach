@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#102a43">
+  <title>Kavach — Pause before payment</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/pause.css">
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#check" aria-label="Kavach home"><span class="brand-mark">K</span><span>Kavach</span></a>
+    <div class="top-actions"><span id="mode-badge" class="mode-badge">Connecting</span><button id="language-shortcut" class="language-shortcut" aria-label="Choose language">EN</button></div>
+  </header>
+
+  <main>
+    <section id="check-view" class="view active" aria-labelledby="check-title">
+      <div class="intro">
+        <p class="eyebrow">A pause for your family</p>
+        <h1 id="check-title">Before you reply,<br>check together.</h1>
+        <p class="lede">Forward a message or describe what happened. Kavach helps you verify who contacted you.</p>
+      </div>
+
+      <form id="check-form" class="check-form">
+        <label class="field-label" for="message-text">What did they say?</label>
+        <textarea id="message-text" maxlength="12000" rows="5" placeholder="Paste the message here…" required></textarea>
+        <div class="form-row">
+          <label class="file-button" for="media-file">Add a photo, voice note or video</label>
+          <input id="media-file" type="file" accept="image/*,audio/*,video/*" hidden>
+          <span id="file-name" class="file-name"></span>
+        </div>
+        <button id="check-button" class="primary-button" type="submit">Check this message</button>
+      </form>
+
+      <div class="sample-strip" aria-label="Synthetic demo examples">
+        <p class="section-kicker">Try a synthetic example</p>
+        <div class="sample-buttons">
+          <button data-sample="arrest">Fake police demand</button>
+          <button data-sample="new-number">Family member, new number</button>
+          <button data-sample="ordinary">Everyday message</button>
+        </div>
+      </div>
+
+      <div id="result" class="result" hidden aria-live="polite"></div>
+    </section>
+
+    <section id="setup-view" class="view" aria-labelledby="setup-title">
+      <div class="page-heading"><p class="eyebrow">Your family decides</p><h1 id="setup-title">Family setup</h1><p class="lede">Only add people who have agreed to be trusted verifiers.</p></div>
+      <form id="setup-form" class="panel-form">
+        <label>Parent's name<input name="parent_name" maxlength="80" required></label>
+        <label>Reply language<select name="language"><option value="en">English</option><option value="te">తెలుగు</option><option value="hi">हिन्दी</option></select></label>
+        <label>Guardian<select name="guardian_contact_id" id="guardian-select"></select></label>
+        <label>When should the guardian be alerted?<select name="escalation_rule"><option value="high_risk">Likely scam or high risk</option><option value="all_pause">Every pause and likely scam</option><option value="all_checks">Every check</option></select></label>
+        <label class="check-consent"><input name="consent" type="checkbox"><span>I understand that Telegram receives the original forwarded message. Kavach stores redacted case details for up to 30 days and uses contact details only as described here.</span></label>
+        <button class="primary-button" type="submit">Save family settings</button>
+      </form>
+      <div class="panel section-gap">
+        <div class="panel-heading"><div><p class="section-kicker">Trusted people</p><h2>Verifiers</h2></div></div>
+        <div id="contact-list" class="contact-list"></div>
+        <p class="small-note">To approve the family's recorded voice message, send a short voice note to the bot with the caption <code>/approve_recording</code>. The recording stays with Telegram; Kavach stores its file reference.</p>
+        <form id="contact-form" class="contact-form">
+          <label>Name<input name="name" required maxlength="80" placeholder="Ravi"></label>
+          <label>Relationship<input name="relationship" required maxlength="80" placeholder="Son"></label>
+          <label>Contact ID<input name="contact_id" required maxlength="64" pattern="[a-zA-Z0-9_-]+" placeholder="ravi"></label>
+          <label>Callback number (optional)<input name="phone" type="tel" placeholder="Only if they shared it"></label>
+          <label class="check-consent"><input name="phone_self_shared" type="checkbox"><span>This person shared this number for family callbacks.</span></label>
+          <label class="check-consent"><input name="is_guardian" type="checkbox"><span>Set as guardian</span></label>
+          <button class="secondary-button" type="submit">Add verifier</button>
+        </form>
+        <p class="small-note">A phone number never proves identity. Each verifier must bind their own Telegram account using a one-time invite.</p>
+      </div>
+      <div class="privacy-note"><h2>What Kavach keeps</h2><p>Approved names, relationships, bound Telegram IDs, optional self-shared callback numbers, consent, and redacted case history. It does not store raw uploads, bank details, location, or family routines.</p><button id="delete-family" class="text-button">Delete family data</button></div>
+    </section>
+
+    <section id="history-view" class="view" aria-labelledby="history-title">
+      <div class="page-heading"><p class="eyebrow">Recent checks</p><h1 id="history-title">Family history</h1><p class="lede">Identity verified means the enrolled person answered. It never means a payment is safe.</p></div>
+      <div id="history-list" class="history-list"></div>
+      <div class="panel audit-panel"><div class="panel-heading"><div><p class="section-kicker">What the service did</p><h2>Recent audit trail</h2></div></div><div id="audit-list" class="audit-list"></div></div>
+    </section>
+
+    <section id="pause-view" class="view pause-view" aria-labelledby="pause-title">
+      <div class="pause-symbol" aria-hidden="true"><span></span><span></span></div>
+      <p class="eyebrow">Take a moment</p>
+      <h1 id="pause-title">Pause.<br>Do not pay.</h1>
+      <p class="pause-copy">Call someone you trust using a number you already know. Do not use a number from the message.</p>
+      <a id="call-link" class="primary-button call-button" href="#" hidden>Call your family</a>
+      <audio id="recording" controls hidden></audio>
+      <div class="recovery-card"><p class="section-kicker">If money may have been sent</p><ul id="recovery-steps"></ul></div>
+      <button class="secondary-button" data-nav="check">Back to checks</button>
+    </section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="Main navigation">
+    <button class="nav-item selected" data-nav="check"><span class="nav-icon">⌕</span><span>Check</span></button>
+    <button class="nav-item" data-nav="setup"><span class="nav-icon">⌂</span><span>Family</span></button>
+    <button class="nav-item" data-nav="history"><span class="nav-icon">◷</span><span>History</span></button>
+  </nav>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
