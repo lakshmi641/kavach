@@ -138,6 +138,21 @@ class TelegramChannel:
     async def send_reply(self, reply: OutboundReply) -> None:
         await self._call("sendMessage", {"chat_id": reply.recipient_id, "text": reply.text})
 
+    async def request_contact(self, recipient_id: str) -> None:
+        """Ask a bound contact to share their own number through Telegram."""
+        await self._call(
+            "sendMessage",
+            {
+                "chat_id": recipient_id,
+                "text": "Share your own Telegram phone number if you want your family to call you from Kavach.",
+                "reply_markup": {
+                    "keyboard": [[{"text": "Share my number", "request_contact": True}]],
+                    "resize_keyboard": True,
+                    "one_time_keyboard": True,
+                },
+            },
+        )
+
     async def send_confirmation_request(self, request: ConfirmationRequest) -> None:
         yes = f"{CALLBACK_PREFIX}:{_CONFIRM}:{request.request_id}:{request.nonce}"
         no = f"{CALLBACK_PREFIX}:{_REJECT}:{request.request_id}:{request.nonce}"

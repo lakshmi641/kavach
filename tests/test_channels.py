@@ -157,6 +157,15 @@ def test_confirmation_request_has_yes_no_buttons_within_limits():
     assert all(len(b["callback_data"].encode()) <= 64 for b in buttons)
 
 
+def test_contact_request_uses_telegram_self_contact_button():
+    http = RecordingHttp()
+    run(telegram(http).request_contact("2002"))
+    [(url, payload)] = http.calls
+    assert url.endswith("/sendMessage")
+    button = payload["reply_markup"]["keyboard"][0][0]
+    assert button == {"text": "Share my number", "request_contact": True}
+
+
 def test_token_is_never_exposed():
     channel = telegram(RecordingHttp({"ok": False, "description": f"bad token {TOKEN}"}))
     assert TOKEN not in repr(channel)

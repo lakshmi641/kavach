@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import importlib
 import json
+import asyncio
 import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -88,9 +89,67 @@ def test_invite_is_single_use_and_binds_telegram_id(tmp_path):
     assert store.load_contacts()[0].identities[0].user_id == "telegram-user"
 
 
+def test_callback_number_requires_a_bound_contact_and_is_marked_self_shared(tmp_path):
+    store = SQLiteStore(tmp_path / "phone.sqlite3")
+    store.save_contact(TrustedContact(
+        "ravi", "Ravi", "son", "", (ChannelIdentity("telegram", "ravi-1"),), True
+    ))
+    assert store.contact_for_identity("telegram", "stranger") is None
+    assert store.contact_for_identity("telegram", "ravi-1") == "ravi"
+    assert store.save_self_shared_phone("ravi", "+91 90000 11111")
+    contact = store.load_contacts()[0]
+    assert contact.phone == "+91 90000 11111"
+
+
+def test_expiring_a_case_also_removes_its_confirmation_request(tmp_path):
+    store = SQLiteStore(tmp_path / "retention.sqlite3")
+    store.save_contact(TrustedContact(
+        "ravi", "Ravi", "son", "", (ChannelIdentity("telegram", "ravi-1"),), True
+    ))
+    created = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    case = Case(
+        "expired-case", "telegram", "parent-1", "redacted", RiskSignals(), Outcome.PAUSE,
+        ["Still verify"], created, pending_request_id="pending-request", pending_nonce="a" * 32,
+        authorized_contact_id="ravi", confirmation_deadline=datetime(2020, 1, 1, tzinfo=timezone.utc),
+    )
+    store.save_case(case)
+    assert store.purge_expired("2021-01-01T00:00:00+00:00") == 1
+    with store._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM confirmation_request").fetchone()[0] == 0
+
+
+def test_telegram_contact_is_saved_only_when_bound_user_shares_their_own_number(tmp_path, monkeypatch):
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "share-phone.sqlite3"))
+    monkeypatch.setenv("KAVACH_ENV", "demo")
+    for key in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "NEBIUS_API_KEY",
+                "MODEL_NANO", "MODEL_SUPER", "MODEL_ULTRA", "TAVILY_API_KEY",
+                "ASR_BASE_URL", "ASR_API_KEY"):
+        monkeypatch.setenv(key, "")
+    module = importlib.import_module("app.main")
+    module = importlib.reload(module)
+    module.store.save_contact(TrustedContact(
+        "ravi", "Ravi", "son", "", (ChannelIdentity("telegram", "2002"),), True
+    ))
+    module.reload_vault()
+    asyncio.run(module.process_update({"message": {
+        "from": {"id": 2002}, "contact": {"user_id": 9999, "phone_number": "+91 90000 11111"}
+    }}))
+    assert module.store.load_contacts()[0].phone == ""
+    asyncio.run(module.process_update({"message": {
+        "from": {"id": 2002}, "contact": {"user_id": 2002, "phone_number": "+91 90000 11111"}
+    }}))
+    saved = module.store.load_contacts()[0]
+    assert saved.phone == "+91 90000 11111"
+
+
 def test_demo_api_check_and_live_webhook_secret_rejection(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", str(tmp_path / "api.sqlite3"))
     monkeypatch.setenv("KAVACH_ENV", "demo")
+    # .env may contain real provider credentials; this test must never call them.
+    for key in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "NEBIUS_API_KEY",
+                "MODEL_NANO", "MODEL_SUPER", "MODEL_ULTRA", "TAVILY_API_KEY",
+                "ASR_BASE_URL", "ASR_API_KEY"):
+        monkeypatch.setenv(key, "")
     module = importlib.import_module("app.main")
     module = importlib.reload(module)
     with TestClient(module.app) as client:
@@ -98,6 +157,9 @@ def test_demo_api_check_and_live_webhook_secret_rejection(tmp_path, monkeypatch)
         assert client.post("/api/demo/session", json={}).status_code == 200
         config = client.get("/api/config")
         assert config.status_code == 200
+        invalid_guardian = client.put("/api/setup", json={"parent_name": "Amma", "language": "en",
+                                                            "guardian_contact_id": "missing", "consent": True})
+        assert invalid_guardian.status_code == 400
         setup = client.put("/api/setup", json={"parent_name": "Amma", "language": "en",
                                                 "guardian_contact_id": "ravi", "consent": True})
         assert setup.status_code == 200

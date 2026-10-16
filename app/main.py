@@ -182,8 +182,6 @@ class ContactInput(BaseModel):
     contact_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     name: str = Field(min_length=1, max_length=80)
     relationship: str = Field(min_length=1, max_length=80)
-    phone: str = Field(default="", max_length=32)
-    phone_self_shared: bool = False
     is_guardian: bool = False
 
 
@@ -308,6 +306,9 @@ async def save_setup(payload: SetupInput, request: Request):
     require_parent(request)
     if payload.consent is not True:
         raise HTTPException(400, "Parent consent is required before using the family vault.")
+    guardian = app.state.vault.get(payload.guardian_contact_id)
+    if not guardian or not guardian.is_guardian:
+        raise HTTPException(400, "Choose an existing verifier who is marked as a guardian.")
     old = store.load_family() or FamilySettings((), payload.parent_name, payload.language,
                                                payload.guardian_contact_id)
     store.save_family(FamilySettings(old.parent, payload.parent_name, payload.language,
@@ -321,14 +322,26 @@ async def save_setup(payload: SetupInput, request: Request):
 @app.post("/api/contacts")
 async def add_contact(payload: ContactInput, request: Request):
     require_parent(request)
-    if payload.phone and not payload.phone_self_shared:
-        raise HTTPException(400, "Store a callback number only when the contact shared it themselves.")
+    if app.state.vault.get(payload.contact_id):
+        raise HTTPException(409, "That contact ID is already in use.")
     contact = TrustedContact(payload.contact_id, payload.name.strip(), payload.relationship.strip(),
-                             payload.phone.strip() if payload.phone_self_shared else "", (), True,
-                             payload.is_guardian)
+                             "", (), True, payload.is_guardian)
     store.save_contact(contact)
     reload_vault()
     return {"ok": True, "contact_id": contact.contact_id}
+
+
+@app.post("/api/contacts/{contact_id}/request-phone")
+async def request_contact_phone(contact_id: str, request: Request):
+    require_parent(request)
+    contact = app.state.vault.get(contact_id)
+    telegram_id = app.state.vault.identity_on(contact_id, "telegram")
+    if not contact or not telegram_id:
+        raise HTTPException(409, "This verifier must bind their Telegram account first.")
+    if not isinstance(app.state.channel, TelegramChannel):
+        raise HTTPException(503, "Phone sharing requires a connected Telegram bot.")
+    await app.state.channel.request_contact(telegram_id)
+    return {"ok": True}
 
 
 @app.delete("/api/contacts/{contact_id}")
@@ -595,6 +608,20 @@ async def process_update(update: dict) -> None:
     message = update.get("message")
     sender = message.get("from") if isinstance(message, dict) else None
     if not isinstance(sender, dict) or "id" not in sender:
+        return
+    shared_contact = message.get("contact")
+    if isinstance(shared_contact, dict):
+        sender_id = str(sender["id"])
+        if str(shared_contact.get("user_id", "")) != sender_id:
+            return
+        contact_id = store.contact_for_identity("telegram", sender_id)
+        phone = str(shared_contact.get("phone_number", "")).strip()
+        if contact_id and phone and len(phone) <= 32:
+            store.save_self_shared_phone(contact_id, phone)
+            reload_vault()
+            await channel.send_reply(OutboundReply(
+                sender_id, "phone-sharing", "Your number was saved for family callbacks.", "en"
+            ))
         return
     text = str(message.get("text") or message.get("caption") or "")
     file_info = message.get("voice") or message.get("audio")

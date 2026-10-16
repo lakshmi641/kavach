@@ -77,6 +77,7 @@ class SQLiteStore:
     def _connect(self) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=10)
         db.row_factory = sqlite3.Row
+        db.execute("PRAGMA foreign_keys=ON")
         return db
 
     def save_family(self, settings: FamilySettings) -> None:
@@ -172,6 +173,22 @@ class SQLiteStore:
     def remove_contact(self, contact_id: str) -> None:
         with self._connect() as db:
             db.execute("DELETE FROM contact WHERE contact_id=?", (contact_id,))
+
+    def contact_for_identity(self, channel: str, user_id: str) -> str | None:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT contact_id FROM identity WHERE channel=? AND user_id=?",
+                (channel, user_id),
+            ).fetchone()
+            return str(row["contact_id"]) if row else None
+
+    def save_self_shared_phone(self, contact_id: str, phone: str) -> bool:
+        with self._connect() as db:
+            cursor = db.execute(
+                "UPDATE contact SET phone=?, phone_self_shared=1 WHERE contact_id=?",
+                (phone, contact_id),
+            )
+            return cursor.rowcount == 1
 
     def family_consented(self) -> bool:
         with self._connect() as db:

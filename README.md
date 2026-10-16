@@ -1,12 +1,18 @@
 
-# Kavach — channel-independent verification slice
+# Kavach
 
 Kavach gives families a verified pause before panic becomes payment.
 
-This repository slice proves one thing: the safety-critical family-verification
-flow (policy, trusted-contact vault, pipeline, audit trail) is independent of the
-messaging channel. It is **not** a bot deployment. There are no model calls, no
-Tavily calls, no dashboard, no tokens, no webhooks and no network I/O.
+Kavach is a working prototype with a Telegram webhook, a Telegram Mini App,
+SQLite persistence, media preprocessing, provider adapters, and a
+channel-independent verification core. The core makes every safety decision;
+models can extract signals and explain evidence, but cannot choose outcomes.
+Use synthetic data for the prototype. Telegram receives forwarded originals,
+even though Kavach masks sensitive values before provider calls.
+
+Provider calls are enabled by environment configuration. Without Nebius model
+credentials, Kavach uses deterministic demo rules. Live voice and video
+transcription requires an ASR endpoint. See `deploy/README.md` before deploying.
 
 ## Layout
 
@@ -26,14 +32,47 @@ core/
 tests/
   test_channels.py           adapter contract, Telegram fixtures, core-isolation check
   test_verification_flow.py  the safety-critical flow on FakeChannel
+app/main.py                  authenticated API, webhook, media path, expiry sweeper
+miniapp/                      check, family setup, history and Circuit-Breaker UI
+store/sqlite.py              persisted contacts, cases, requests and audit trail
+models/                       demo extractor and optional Nebius model clients
+evidence/                     official-source lookup and dated demo cache
+bench/                        synthetic datasets, runner and Markdown report
 ```
 
-## Run the tests
+## Run locally
 
 ```bash
-python3 -m pip install pytest
+python3 -m pip install -r requirements.txt -r requirements-dev.txt
+cp .env.example .env
+uvicorn app.main:app --reload
+```
+
+Open `http://127.0.0.1:8000` for the browser demo. It uses synthetic contacts
+and local session auth. The demo page displays which providers are connected.
+Images require Pillow and Tesseract; audio and video require ASR settings, and
+video additionally requires ffmpeg.
+
+## Run tests
+
+```bash
 python3 -m pytest -v
 ```
+
+The tests use fake channels and provider-free fixtures. They should not make
+Telegram, Nebius, or Tavily calls, even when a developer `.env` has credentials.
+
+## Run the synthetic benchmark
+
+```bash
+python3 -m bench.run --split both --output /tmp/kavach-benchmark.json
+python3 -m bench.report /tmp/kavach-benchmark.json --output /tmp/kavach-benchmark.md
+```
+
+The default run uses generated synthetic signals and simulated verifier
+answers. It does not measure live evidence coverage, provider latency, cost, or
+real-world scam detection. Add `--live-nano` to the runner only when `NEBIUS_API_KEY`
+and `MODEL_NANO` are configured; this uses provider credits.
 
 ## Safety properties the tests enforce
 
@@ -70,7 +109,7 @@ new file, `channels/whatsapp.py`, and nothing in `core/` changes:
 
 Policy, vault, pipeline and audit code stay unchanged.
 
-## Boundaries of this slice
+## Prototype boundaries
 
 - Telegram is not end-to-end private; Telegram's servers see raw messages. The
   prototype uses synthetic data only.

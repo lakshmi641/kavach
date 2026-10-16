@@ -27,6 +27,20 @@ function navigate(view) {
   if (view === "setup") loadSetup();
   window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
 }
+function showServiceStatus(data) {
+  const notice = $("#service-notice");
+  if (!data) { notice.hidden = true; return; }
+  const providers = data.providers || {};
+  const parts = [];
+  if (data.demo) parts.push("Synthetic demo data is active.");
+  if (!providers.models) parts.push("Demo signal rules are active; live model analysis is not connected.");
+  if (!providers.telegram) parts.push("Telegram delivery is not connected in this browser session.");
+  if (!providers.tavily) parts.push("Official-source search is unavailable; cached advisories may appear.");
+  if (!parts.length) parts.push("Protected family session is connected.");
+  notice.textContent = parts.join(" ");
+  notice.classList.toggle("notice-warning", data.demo || !providers.models || !providers.telegram);
+  notice.hidden = false;
+}
 function outcomeLabel(outcome) {
   return outcome === "VERIFIED" ? "Identity route verified" : outcome === "LIKELY_SCAM" ? "Likely scam" : "Pause and verify";
 }
@@ -93,10 +107,49 @@ async function loadSetup() {
     $("#mode-badge").textContent = config.demo ? "Synthetic demo" : "Protected session";
     $("#guardian-select").innerHTML = config.contacts.map(c => `<option value="${escapeHtml(c.contact_id)}">${escapeHtml(c.name)}</option>`).join("");
     form.elements.guardian_contact_id.value = config.family.guardian_contact_id;
+    const guardianSelect = $("#guardian-select");
+    [...guardianSelect.options].forEach(option => {
+      const contact = config.contacts.find(c => c.contact_id === option.value);
+      if (option.value && !contact?.is_guardian) option.remove();
+    });
+    const chooseGuardian = document.createElement("option");
+    chooseGuardian.value = ""; chooseGuardian.textContent = "Choose a guardian";
+    guardianSelect.prepend(chooseGuardian);
     $("#contact-list").innerHTML = config.contacts.map(c => `<div class="contact-row"><div><div class="person-name">${escapeHtml(c.name)}${c.is_guardian ? " · guardian" : ""}</div><div class="person-meta">${escapeHtml(c.relationship)}${c.phone_available ? " · callback number shared" : ""}</div></div><span class="bound-status ${c.bound ? "" : "unbound"}">${c.bound ? "Telegram bound" : "Invite needed"}</span>${!c.bound ? `<button class="small-button" data-invite="${escapeHtml(c.contact_id)}">Invite</button>` : ""}</div>`).join("") || `<p class="empty-state">No verifiers have been added.</p>`;
     $$('[data-invite]').forEach(button => button.addEventListener("click", async () => {
       try { const item = await api(`/api/contacts/${button.dataset.invite}/invite`, {method:"POST"}); await navigator.clipboard?.writeText(item.instruction); toast(item.instruction); }
       catch (err) { toast(err.message); }
+    }));
+    $$(".contact-row").forEach((row, index) => {
+      const contact = config.contacts[index];
+      const actions = document.createElement("div");
+      actions.className = "contact-actions";
+      if (contact.bound && !contact.phone_available) {
+        const request = document.createElement("button");
+        request.className = "small-button"; request.textContent = "Request number";
+        request.dataset.requestPhone = contact.contact_id; actions.append(request);
+      }
+      const remove = document.createElement("button");
+      remove.className = "text-button remove-contact"; remove.textContent = "Remove";
+      remove.dataset.remove = contact.contact_id;
+      remove.setAttribute("aria-label", "Remove " + contact.name);
+      actions.append(remove); row.append(actions);
+    });
+    $$("[data-request-phone]").forEach(button => button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await api("/api/contacts/" + encodeURIComponent(button.dataset.requestPhone) + "/request-phone", {method:"POST"});
+        toast("A private Telegram request was sent to this verifier.");
+      } catch (err) { toast(err.message); }
+      finally { button.disabled = false; }
+    }));
+    $$("[data-remove]").forEach(button => button.addEventListener("click", async () => {
+      const contact = config.contacts.find(c => c.contact_id === button.dataset.remove);
+      if (!contact || !confirm("Remove " + contact.name + " from trusted verifiers?")) return;
+      try {
+        await api("/api/contacts/" + encodeURIComponent(contact.contact_id), {method:"DELETE"});
+        await loadSetup(); toast("Verifier removed.");
+      } catch (err) { toast(err.message); }
     }));
   } catch (err) { toast(err.message); }
 }
@@ -117,8 +170,8 @@ async function initialize() {
     await api("/api/demo/session", {method:"POST", body:"{}"}).catch(() => {});
     document.body.classList.add("browser-demo");
   }
-  try { config = await api("/api/config"); $("#mode-badge").textContent = config.demo ? "Synthetic demo" : "Protected session"; }
-  catch { $("#mode-badge").textContent = "Setup needed"; }
+  try { config = await api("/api/config"); $("#mode-badge").textContent = config.demo ? "Synthetic demo" : "Protected session"; showServiceStatus(config); }
+  catch (err) { $("#mode-badge").textContent = "Setup needed"; showServiceStatus(null); toast(err.message); }
   const caseId = new URLSearchParams(location.search).get("case");
   if (location.pathname === "/pause" && caseId) {
     try { const data = await api(`/api/cases/${encodeURIComponent(caseId)}`); await showPause(data); }
@@ -129,15 +182,21 @@ async function initialize() {
 $("#check-form").addEventListener("submit", async event => { event.preventDefault(); const file = $("#media-file").files[0];
   if (file) {
     const button = $("#check-button"); button.disabled = true; button.textContent = "Receiving upload…";
-    try { const response = await fetch("/api/check/upload", {method:"POST", body:file, headers:{"Content-Type":file.type || "application/octet-stream"}, credentials:"same-origin"}); const data = await response.json(); if (!response.ok) throw new Error(data.detail); renderResult(data); }
+    try { const response = await fetch("/api/check/upload", {method:"POST", body:file, headers:{"Content-Type":file.type || "application/octet-stream"}, credentials:"same-origin"}); const data = await response.json(); if (!response.ok) throw new Error(data.detail); renderResult(data); $("#media-file").value = ""; $("#file-name").textContent = ""; }
     catch (err) { toast(err.message); } finally { button.disabled = false; button.textContent = "Check this message"; }
   } else await runCheck($("#message-text").value);
 });
-$("#media-file").addEventListener("change", event => { $("#file-name").textContent = event.target.files[0]?.name || ""; });
+$("#media-file").addEventListener("change", event => {
+  const file = event.target.files[0];
+  if (file && file.size > 20 * 1024 * 1024) {
+    event.target.value = ""; $("#file-name").textContent = ""; toast("Choose a media file smaller than 20 MB."); return;
+  }
+  $("#file-name").textContent = file ? file.name + " · " + (file.size / 1024 / 1024).toFixed(1) + " MB" : "";
+});
 $$('[data-sample]').forEach(button => button.addEventListener("click", () => { $("#message-text").value = sampleMessages[button.dataset.sample]; $("#media-file").value = ""; $("#file-name").textContent = ""; }));
 $$('[data-nav]').forEach(button => button.addEventListener("click", () => navigate(button.dataset.nav)));
 $("#setup-form").addEventListener("submit", async event => { event.preventDefault(); const form = event.currentTarget; const data = Object.fromEntries(new FormData(form)); data.consent = form.elements.consent.checked; try { await api("/api/setup", {method:"PUT", body:JSON.stringify(data)}); toast("Family settings saved."); await loadSetup(); } catch (err) { toast(err.message); } });
-$("#contact-form").addEventListener("submit", async event => { event.preventDefault(); const form = event.currentTarget; const data = Object.fromEntries(new FormData(form)); data.phone_self_shared = form.elements.phone_self_shared.checked; data.is_guardian = form.elements.is_guardian.checked; try { await api("/api/contacts", {method:"POST", body:JSON.stringify(data)}); form.reset(); await loadSetup(); toast("Verifier added. Send them a binding invite."); } catch (err) { toast(err.message); } });
+$("#contact-form").addEventListener("submit", async event => { event.preventDefault(); const form = event.currentTarget; const data = Object.fromEntries(new FormData(form)); data.is_guardian = form.elements.is_guardian.checked; try { await api("/api/contacts", {method:"POST", body:JSON.stringify(data)}); form.reset(); await loadSetup(); toast("Verifier added. Send them a one-time binding invite."); } catch (err) { toast(err.message); } });
 $("#delete-family").addEventListener("click", async () => { if (!confirm("Delete all family settings, cases and audit entries from this device? This cannot be undone.")) return; try { await api("/api/family-data", {method:"DELETE"}); toast("Family data deleted."); location.reload(); } catch (err) { toast(err.message); } });
 $("#language-shortcut").addEventListener("click", () => navigate("setup"));
 initialize();

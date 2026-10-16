@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
@@ -12,26 +12,26 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class Settings:
-    database_path: str = os.getenv("DB_PATH", "./data/kavach.sqlite3")
-    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    telegram_webhook_secret: str = os.getenv("TELEGRAM_WEBHOOK_SECRET", "")
-    parent_telegram_id: str = os.getenv("PARENT_TELEGRAM_ID", "")
-    telegram_bot_username: str = os.getenv("TELEGRAM_BOT_USERNAME", "")
-    mini_app_url: str = os.getenv("MINI_APP_URL", "")
-    nebius_api_key: str = os.getenv("NEBIUS_API_KEY", "")
-    nebius_base_url: str = os.getenv("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
-    model_nano: str = os.getenv("MODEL_NANO", "")
-    model_super: str = os.getenv("MODEL_SUPER", "")
-    model_ultra: str = os.getenv("MODEL_ULTRA", "")
-    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
-    asr_base_url: str = os.getenv("ASR_BASE_URL", "")
-    asr_api_key: str = os.getenv("ASR_API_KEY", "")
-    asr_model: str = os.getenv("ASR_MODEL", "whisper-1")
-    audit_hmac_key: str = os.getenv("AUDIT_HMAC_KEY", "")
-    environment: str = os.getenv("KAVACH_ENV", "demo")
-    session_secret: str = os.getenv("SESSION_SECRET", "local-demo-session-secret-change-me")
-    model_input_cost_per_million_inr: float = float(os.getenv("MODEL_INPUT_COST_PER_MILLION_INR", "0"))
-    model_output_cost_per_million_inr: float = float(os.getenv("MODEL_OUTPUT_COST_PER_MILLION_INR", "0"))
+    database_path: str = field(default_factory=lambda: os.getenv("DB_PATH", "./data/kavach.sqlite3"))
+    telegram_bot_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
+    telegram_webhook_secret: str = field(default_factory=lambda: os.getenv("TELEGRAM_WEBHOOK_SECRET", ""))
+    parent_telegram_id: str = field(default_factory=lambda: os.getenv("PARENT_TELEGRAM_ID", ""))
+    telegram_bot_username: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_USERNAME", ""))
+    mini_app_url: str = field(default_factory=lambda: os.getenv("MINI_APP_URL", ""))
+    nebius_api_key: str = field(default_factory=lambda: os.getenv("NEBIUS_API_KEY", ""))
+    nebius_base_url: str = field(default_factory=lambda: os.getenv("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1"))
+    model_nano: str = field(default_factory=lambda: os.getenv("MODEL_NANO", ""))
+    model_super: str = field(default_factory=lambda: os.getenv("MODEL_SUPER", ""))
+    model_ultra: str = field(default_factory=lambda: os.getenv("MODEL_ULTRA", ""))
+    tavily_api_key: str = field(default_factory=lambda: os.getenv("TAVILY_API_KEY", ""))
+    asr_base_url: str = field(default_factory=lambda: os.getenv("ASR_BASE_URL", ""))
+    asr_api_key: str = field(default_factory=lambda: os.getenv("ASR_API_KEY", ""))
+    asr_model: str = field(default_factory=lambda: os.getenv("ASR_MODEL", "whisper-1"))
+    audit_hmac_key: str = field(default_factory=lambda: os.getenv("AUDIT_HMAC_KEY", ""))
+    environment: str = field(default_factory=lambda: os.getenv("KAVACH_ENV", "demo"))
+    session_secret: str = field(default_factory=lambda: os.getenv("SESSION_SECRET", "local-demo-session-secret-change-me"))
+    model_input_cost_per_million_inr: float = field(default_factory=lambda: float(os.getenv("MODEL_INPUT_COST_PER_MILLION_INR", "0")))
+    model_output_cost_per_million_inr: float = field(default_factory=lambda: float(os.getenv("MODEL_OUTPUT_COST_PER_MILLION_INR", "0")))
 
     @property
     def live_models_enabled(self) -> bool:

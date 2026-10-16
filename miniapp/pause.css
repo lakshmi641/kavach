@@ -1,1 +1,10 @@
 #pause-title { white-space: pre-line; line-height: 1.12; letter-spacing: -.06em; }
+.service-notice{width:min(100% - 36px,720px);margin:16px auto 0;padding:12px 15px;border:1px solid #b4ded9;border-left:4px solid var(--teal);border-radius:10px;background:#eaf5f3;color:var(--ink-soft);font-size:14px;line-height:1.5}
+.service-notice.notice-warning{border-color:#e3c869;border-left-color:#b88700;background:#fff7dc;color:#624d12}
+.contact-person{min-width:0;flex:1}
+.contact-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.remove-contact{font-size:12px;white-space:nowrap}
+.upload-note{margin-top:-8px;margin-bottom:16px}
+.small-button:disabled,.primary-button:disabled{opacity:.58;cursor:wait}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #e6aa19;outline-offset:3px}
+@media(max-width:520px){.contact-row{align-items:flex-start;flex-wrap:wrap}.contact-person{flex-basis:calc(100% - 130px)}.contact-actions{width:100%;justify-content:flex-start;padding-left:0}.contact-row .bound-status{margin-left:auto}.check-form{padding:16px}.service-notice{font-size:13px}}

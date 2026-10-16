@@ -15,6 +15,7 @@
     <a class="brand" href="#check" aria-label="Kavach home"><span class="brand-mark">K</span><span>Kavach</span></a>
     <div class="top-actions"><span id="mode-badge" class="mode-badge">Connecting</span><button id="language-shortcut" class="language-shortcut" aria-label="Choose language">EN</button></div>
   </header>
+  <div id="service-notice" class="service-notice" role="status" aria-live="polite" hidden></div>
 
   <main>
     <section id="check-view" class="view active" aria-labelledby="check-title">
@@ -26,12 +27,13 @@
 
       <form id="check-form" class="check-form">
         <label class="field-label" for="message-text">What did they say?</label>
-        <textarea id="message-text" maxlength="12000" rows="5" placeholder="Paste the message here…" required></textarea>
+        <textarea id="message-text" maxlength="12000" rows="5" placeholder="Paste the message here…"></textarea>
         <div class="form-row">
           <label class="file-button" for="media-file">Add a photo, voice note or video</label>
           <input id="media-file" type="file" accept="image/*,audio/*,video/*" hidden>
-          <span id="file-name" class="file-name"></span>
+          <span id="file-name" class="file-name" aria-live="polite"></span>
         </div>
+        <p class="small-note upload-note">Media files up to 20 MB. Photos use text recognition; voice and video need speech recognition to be configured.</p>
         <button id="check-button" class="primary-button" type="submit">Check this message</button>
       </form>
 
@@ -52,7 +54,7 @@
       <form id="setup-form" class="panel-form">
         <label>Parent's name<input name="parent_name" maxlength="80" required></label>
         <label>Reply language<select name="language"><option value="en">English</option><option value="te">తెలుగు</option><option value="hi">हिन्दी</option></select></label>
-        <label>Guardian<select name="guardian_contact_id" id="guardian-select"></select></label>
+          <label>Guardian<select name="guardian_contact_id" id="guardian-select" required></select></label>
         <label>When should the guardian be alerted?<select name="escalation_rule"><option value="high_risk">Likely scam or high risk</option><option value="all_pause">Every pause and likely scam</option><option value="all_checks">Every check</option></select></label>
         <label class="check-consent"><input name="consent" type="checkbox"><span>I understand that Telegram receives the original forwarded message. Kavach stores redacted case details for up to 30 days and uses contact details only as described here.</span></label>
         <button class="primary-button" type="submit">Save family settings</button>
@@ -65,12 +67,10 @@
           <label>Name<input name="name" required maxlength="80" placeholder="Ravi"></label>
           <label>Relationship<input name="relationship" required maxlength="80" placeholder="Son"></label>
           <label>Contact ID<input name="contact_id" required maxlength="64" pattern="[a-zA-Z0-9_-]+" placeholder="ravi"></label>
-          <label>Callback number (optional)<input name="phone" type="tel" placeholder="Only if they shared it"></label>
-          <label class="check-consent"><input name="phone_self_shared" type="checkbox"><span>This person shared this number for family callbacks.</span></label>
           <label class="check-consent"><input name="is_guardian" type="checkbox"><span>Set as guardian</span></label>
           <button class="secondary-button" type="submit">Add verifier</button>
         </form>
-        <p class="small-note">A phone number never proves identity. Each verifier must bind their own Telegram account using a one-time invite.</p>
+        <p class="small-note">Each verifier binds their own Telegram account with a one-time invite. A callback number can be requested after binding; Kavach accepts it only when that person shares their own Telegram contact.</p>
       </div>
       <div class="privacy-note"><h2>What Kavach keeps</h2><p>Approved names, relationships, bound Telegram IDs, optional self-shared callback numbers, consent, and redacted case history. It does not store raw uploads, bank details, location, or family routines.</p><button id="delete-family" class="text-button">Delete family data</button></div>
     </section>

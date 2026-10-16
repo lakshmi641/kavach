@@ -6,7 +6,6 @@ import argparse
 import asyncio
 import json
 import statistics
-import time
 from pathlib import Path
 
 from bench.cases import CaseRow, development_cases, heldout_cases
@@ -46,15 +45,14 @@ def run(cases: list[CaseRow], *, predicted: list[tuple[bool, bool, bool, bool]] 
     benign_paused = 0
     leak_count = 0
     latency_samples = list(provider_latency or [])
-    citation_found = 0
+    # This runner has no evidence-provider hook yet; do not turn labels into
+    # apparent citation measurements.
+    citation_found = None
     citation_possible = sum(c.applicable_dated_advisory for c in cases)
     for index, case in enumerate(cases):
-        start = time.perf_counter()
         signals = predicted[index] if predicted else case.signals
         generic = baseline(case, signals)
         outcome, route_verified = kavach(case, signals)
-        if not provider_latency:
-            latency_samples.append((time.perf_counter() - start) * 1000)
         is_scam = case.category in {"family_impersonation", "authority_scam"} and not case.verifier_confirms
         if is_scam and generic in {"TRUST", "VERIFIED"}:
             generic_scams_trusted += 1
@@ -68,11 +66,8 @@ def run(cases: list[CaseRow], *, predicted: list[tuple[bool, bool, bool, bool]] 
             benign_paused += 1
         if case.planted_value and case.planted_value in redact(case.text + " " + case.planted_value).text:
             leak_count += 1
-        # This deterministic offline run deliberately makes no live evidence claim.
-        if case.applicable_dated_advisory and signals[2]:
-            citation_found += 1
     lat_sorted = sorted(latency_samples)
-    p50 = statistics.median(lat_sorted) if lat_sorted else 0.0
+    p50 = statistics.median(lat_sorted) if lat_sorted else None
     return {
         "dataset": "heldout" if len(cases) == 60 else "development",
         "cases": len(cases), "mix": {key: sum(c.category == key for c in cases) for key in
@@ -85,7 +80,7 @@ def run(cases: list[CaseRow], *, predicted: list[tuple[bool, bool, bool, bool]] 
         "planted_identifiers_left_unredacted": leak_count,
         "dated_citations_found": citation_found,
         "dated_citations_applicable": citation_possible,
-        "latency_p50_ms": round(p50, 3),
+        "latency_p50_ms": round(p50, 3) if p50 is not None else None,
         "cost_per_check_rupees": (round(statistics.mean(provider_cost), 6) if provider_cost else None),
         "limitations": ["Synthetic labels and simulated verifier answers.",
                         "A live run measures Nano signals only; it is not a real-world efficacy estimate.",
